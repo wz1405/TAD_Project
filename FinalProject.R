@@ -6,7 +6,8 @@ libraries <- c("ldatuning", "topicmodels", "ggplot2",
                "tidyr", "xtable", "devtools", "utf8", "preText",
                "gutenbergr", "data.table", "stringi", "stringr",
                "xml2", "rvest", "tidyverse", "reshape2","httr",
-               "ROAuth", "twitteR", "readtext")
+               "ROAuth", "twitteR", "readtext", "tm", "SnowballC",
+               "wordcloud", "RColorBrewer")
 lapply(libraries, require, character.only = TRUE)
 
 setwd("/Users/zhengwenjie/Documents/RData/") 
@@ -31,6 +32,12 @@ dim(mta_hashtags_merged)
 # subset
 mta_hashtag_columns <- c("X", "text", "favoriteCount", "created", 
             "screenName", "retweetCount", "longitude", "latitude")
+
+mta_hashtags_merged$text <- tolower(mta_hashtags_merged$text)
+mta_hashtags_merged$text <- removeWords(mta_hashtags_merged$text,stopwords('en'))
+mta_hashtags_merged$text <- removePunctuation(mta_hashtags_merged$text)
+mta_hashtags_merged$text <- gsub('[\r\n]', '', mta_hashtags_merged$text)
+
 mta_hashtags_merged <- mta_hashtags_merged[mta_hashtag_columns]
 # drop duplicated & overlapped data for some dates
 # not working: mta_hashtags_merged_drop <- mta_hashtags_merged[!duplicated(mta_hashtags_merged$text), ]
@@ -56,20 +63,25 @@ mta_hashtags_merged$text_negative <- rowSums(dfm(mta_hashtags_merged$text, selec
 mta_hashtags_merged$sentiment_score <- mta_hashtags_merged$text_positive - mta_hashtags_merged$text_negative
 
 # if is 0 and above, tag it positive and negative for less than 0
-mta_hashtags_merged$sentiment_attitude[mta_hashtags_merged$sentiment_score > -1] <- 'positive'
+mta_hashtags_merged$sentiment_attitude[mta_hashtags_merged$sentiment_score > 0] <- 'positive'
 mta_hashtags_merged$sentiment_attitude[mta_hashtags_merged$sentiment_score < 0] <- 'negative'
-
+mta_hashtags_merged$sentiment_attitude[mta_hashtags_merged$sentiment_score == 0] <- 'neutral'
 # number of occurence of positive & negative & the total row number in the column
-pos_number <- nrow(mta_hashtags_merged[mta_hashtags_merged$sentiment_score > -1,])
+pos_number <- nrow(mta_hashtags_merged[mta_hashtags_merged$sentiment_score > 0,])
 neg_number <- nrow(mta_hashtags_merged[mta_hashtags_merged$sentiment_score < 0,])
+neu_number <- nrow(mta_hashtags_merged[mta_hashtags_merged$sentiment_score == 0,])
+
 total_rows <- nrow(mta_hashtags_merged)
 
 # calculate and report the ratio
 positive_ratio <- pos_number / total_rows
 negative_ratio <- neg_number / total_rows
+neutral_ratio <- neu_number / total_rows
+
 cat(
   "positive_ratio: ", positive_ratio, "\n",
-  "negative_ratio:",  negative_ratio, "\n"
+  "negative_ratio:",  negative_ratio, "\n",
+  "neutral_ratio:",  neutral_ratio, "\n"
 )
 # histogram
 hist(mta_hashtags_merged$sentiment_score,
@@ -78,3 +90,5 @@ hist(mta_hashtags_merged$sentiment_score,
      ylab="Histogram Frequency Distribution",
      border="black", 
      col="green")
+
+
