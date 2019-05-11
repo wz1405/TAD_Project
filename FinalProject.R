@@ -37,6 +37,12 @@ mta_hashtags_merged$text <- tolower(mta_hashtags_merged$text)
 mta_hashtags_merged$text <- removeWords(mta_hashtags_merged$text,stopwords('en'))
 mta_hashtags_merged$text <- removePunctuation(mta_hashtags_merged$text)
 mta_hashtags_merged$text <- gsub('[\r\n]', '', mta_hashtags_merged$text)
+mta_hashtags_merged$text <- gsub("rt", " ", mta_hashtags_merged$text)
+mta_hashtags_merged$text <- gsub("@\\w+", " ", mta_hashtags_merged$text)
+mta_hashtags_merged$text <- gsub("http\\w+", " ", mta_hashtags_merged$text)
+mta_hashtags_merged$text <- gsub("[ |\t]{2,}", " ", mta_hashtags_merged$text)
+mta_hashtags_merged$text <- gsub("^ ", " ", mta_hashtags_merged$text)
+mta_hashtags_merged$text <- gsub(" $", " ", mta_hashtags_merged$text)
 
 mta_hashtags_merged <- mta_hashtags_merged[mta_hashtag_columns]
 # drop duplicated & overlapped data for some dates
