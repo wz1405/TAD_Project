@@ -175,3 +175,119 @@ rownames(Sentimentscores_mta)<-NULL
 ggplot(data=Sentimentscores_mta,aes(x=sentiment,y=Score))+geom_bar(aes(fill=sentiment),stat = "identity")+
   theme(legend.position="none")+
   xlab("Sentiments")+ylab("scores")+ggtitle("Sentiments of people behind the tweets on MTA hashtags")+ theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# -----------------------------------------
+# nyct subway timeline
+# -----------------------------------------
+
+rm(list = ls())
+
+libraries <- c("ldatuning", "topicmodels", "ggplot2", 
+               "dplyr", "rjson", "quanteda", "lubridate", 
+               "parallel", "doParallel", "tidytext", "stringi", 
+               "tidyr", "xtable", "devtools", "utf8", "preText",
+               "gutenbergr", "data.table", "stringi", "stringr",
+               "xml2", "rvest", "tidyverse", "reshape2","httr",
+               "ROAuth", "twitteR", "readtext", "tm", "SnowballC",
+               "wordcloud", "RColorBrewer", "syuzhet")
+lapply(libraries, require, character.only = TRUE)
+
+setwd("/Users/zhengwenjie/Documents/RData/") 
+
+# create bag of words from nyc open data portal
+subway_station_list <- read.csv(file="/Users/zhengwenjie/Documents/RData/DOITT_SUBWAY_STATION_01_13SEPT2010.csv", header=TRUE, sep=",", stringsAsFactors = F)
+glimpse(subway_station_list)
+# unlist() & asCharacter() &  toLower()
+station_names <- unlist(subway_station_list$NAME)
+station_names <- as.character(station_names)
+station_names <- tolower(station_names)
+station_names <- gsub('th', ' ', station_names)
+station_names <- gsub('nd', ' ', station_names)
+station_names <- unique(station_names)
+#station_names <- gsub('st', '', station_names)
+
+# list of lines
+line_names <- unlist(subway_station_list$LINE)
+line_names <- as.character(line_names)
+line_names <- tolower(line_names) 
+line_names <- gsub("-", " ", line_names) %>% unlist() %>% unique()
+
+# read in the csv as of 421, 428, 510
+subway_DF_421 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf421/NYCTSubway_timeline_df.csv", header=TRUE, sep=",", stringsAsFactors = F)
+subway_DF_428 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf428/NYCTSubway_timeline_df_428.csv", header=TRUE, sep=",", stringsAsFactors = F)
+subway_DF_510 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf510/NYCTSubway_timeline_df_510.csv", header=TRUE, sep=",", stringsAsFactors = F)
+nrow(subway_DF_421)
+nrow(subway_DF_428)
+nrow(subway_DF_510)
+
+# merge data frames vertically with rbind()
+subway_timeline_merged <- rbind(subway_DF_421,subway_DF_428,subway_DF_510)
+# sort by date time
+subway_timeline_merged <- subway_timeline_merged[order(subway_timeline_merged$created , decreasing = TRUE ),]
+dim(subway_timeline_merged)
+# subset
+subway_timeline_columns <- c("X", "text", "favoriteCount", "created", 
+                         "screenName", "retweetCount", "longitude", "latitude")
+subway_timeline_merged <- subway_timeline_merged[subway_timeline_columns]
+
+# drop duplicated & overlapped data for some dates
+# not working: mta_hashtags_merged_drop <- mta_hashtags_merged[!duplicated(mta_hashtags_merged$text), ]
+subway_timeline_merged <- subway_timeline_merged[!(duplicated(subway_timeline_merged[c("text","created")]) | duplicated(subway_timeline_merged[c("text","created")], fromLast = F)), ]
+dim(subway_timeline_merged)
+
+# preprocessing & cleaning
+subway_timeline_merged$text <- tolower(subway_timeline_merged$text)
+subway_timeline_merged$text <- removeWords(subway_timeline_merged$text,stopwords('en'))
+# subway_timeline_merged$text <- stemDocument(subway_timeline_merged$text)
+# subway_timeline_merged$text <- removePunctuation(subway_timeline_merged$text)
+# remove 'th' in station names
+subway_timeline_merged$text <- gsub('th', ' ', subway_timeline_merged$text)
+subway_timeline_merged$text <- gsub('-', ' ', subway_timeline_merged$text)
+subway_timeline_merged$text <- gsub('[\r\n]', ' ', subway_timeline_merged$text)
+# removing 'rt', remove 'rt : ' characters do not work:
+subway_timeline_merged$text <- gsub("rt", " ", subway_timeline_merged$text)
+# remove @ strings: 
+# question: remove @ or not? for now, remove, will better help in analyzing word cloud stuff
+subway_timeline_merged$text <- gsub("@\\w+", " ", subway_timeline_merged$text)
+# remove website
+subway_timeline_merged$text <- gsub("http\\w+", " ", subway_timeline_merged$text)
+subway_timeline_merged$text <- gsub("[ |\t]{2,}", " ", subway_timeline_merged$text)
+subway_timeline_merged$text <- gsub("^ ", " ", subway_timeline_merged$text)
+subway_timeline_merged$text <- gsub(" $", " ", subway_timeline_merged$text)
+subway_timeline_merged$text <- gsub("[^\x01-\x7F]", " ", subway_timeline_merged$text)
+
+# word cloud
+wordcloud(subway_timeline_merged$text,min.freq = 50,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 200)
+# bigrams
+head(textstat_collocations(subway_timeline_merged$text))
+textstat_collocations(subway_timeline_merged$text) %>% arrange(-lambda) %>% slice(1:10)
+
+# average retweet and fav
+mean(subway_timeline_merged$favoriteCount)
+mean(subway_timeline_merged$retweetCount)
+
+# delays stat
+# subset by delays
+subway_delay <- subway_timeline_merged[grep("delays", subway_timeline_merged$text), ]
+dim(subway_delay)
+# top words
+top_words_delay <- textstat_frequency(dfm(subway_delay$text), n = NULL, groups = NULL) %>% select(feature, frequency)
+head(top_words_delay,20)
+
+# delay by subway station
+# check the station names in both dataset are in the same format
+# grep each element in turn 
+# https://stackoverflow.com/questions/38724690/r-filter-rows-that-contain-a-string-from-a-vector/38726850
+station_delay <- subway_delay[grep(paste(station_names, collapse="|"), subway_delay$text),]
+line_delay <- subway_delay[grep(paste(line_names, collapse="|"), subway_delay$text),]
+# delay at stations
+top_words_station_delay <- textstat_frequency(dfm(station_delay$text), n = NULL, groups = NULL) %>% select(feature, frequency)
+head(top_words_station_delay, 40)
+# bigrams
+head(textstat_collocations(station_delay$text))
+textstat_collocations(station_delay$text) %>% arrange(-lambda) %>% slice(1:10)
+
+# str count # https://stackoverflow.com/questions/49552174/count-the-frequency-of-strings-in-a-dataframe-r
+station_count_test <- data.frame(station_names,freq=rowSums(!adist(station_names,station_names,partial = T)))
+station_count_test <- station_count_test[order(-station_count_test$freq),]
+head(station_count_test)
