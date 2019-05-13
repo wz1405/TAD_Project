@@ -1,0 +1,90 @@
+---
+title: "Final_project"
+author: "Chang Du"
+date: "5/11/2019"
+output: html_document
+---
+
+```{r}
+rm(list = ls())
+getwd()  # returns current working directory
+setwd( "/Users/duchang/NYU CUSP/Text as Data/FinalProject")  # set working directory
+```
+```{r}
+libraries <- c("ldatuning", "topicmodels", "ggplot2", 
+               "dplyr", "rjson", "quanteda", "lubridate", 
+               "parallel", "doParallel", "tidytext", "stringi", 
+               "tidyr", "xtable", "devtools", "utf8", "preText",
+               "gutenbergr", "data.table", "stringi", "stringr",
+               "xml2", "rvest", "tidyverse", "reshape2","httr",
+               "ROAuth", "twitteR", "readtext", "tm", "SnowballC",
+               "wordcloud", "RColorBrewer", "httr", "RCurl")
+lapply(libraries, require, character.only = TRUE)
+```
+
+```{r}
+# read in the csv as of 421, 428, 510
+CTA_Hashtags_DF_421 <- read.csv(file="AsOf421/tweets_cta.csv", header=TRUE, sep=",", stringsAsFactors = F)
+CTA_Hashtags_DF_428 <- read.csv(file="AsOf428/tweets_cta_428.csv", header=TRUE, sep=",", stringsAsFactors = F)
+CTA_Hashtags_DF_510 <- read.csv(file="AsOf510/tweets_cta_510.csv", header=TRUE, sep=",", stringsAsFactors = F)
+nrow(CTA_Hashtags_DF_421)
+nrow(CTA_Hashtags_DF_428)
+nrow(CTA_Hashtags_DF_510)
+```
+
+```{r}
+# merge data frames vertically with rbind()
+cta_hashtags_merged <- rbind(CTA_Hashtags_DF_421,CTA_Hashtags_DF_428,CTA_Hashtags_DF_510)
+# sort by date time
+cta_hashtags_merged <- cta_hashtags_merged[order(cta_hashtags_merged$created , decreasing = TRUE ),]
+dim(cta_hashtags_merged)
+# subset
+cta_hashtag_columns <- c("X", "text", "favoriteCount", "created", 
+            "screenName", "retweetCount", "longitude", "latitude")
+cta_hashtags_merged <- cta_hashtags_merged[cta_hashtag_columns]
+# drop duplicated & overlapped data for some dates
+# not working: mta_hashtags_merged_drop <- mta_hashtags_merged[!duplicated(mta_hashtags_merged$text), ]
+cta_hashtags_merged <- cta_hashtags_merged[!(duplicated(cta_hashtags_merged[c("text","created")]) | duplicated(cta_hashtags_merged[c("text","created")], fromLast = F)), ]
+# get rid of @mta_mood, posts affect the data and possibly results
+cta_hashtags_merged <- cta_hashtags_merged[!(cta_hashtags_merged$screenName== 'mta_mood'),]
+```
+
+```{r}
+cta_hashtags_merged$text <- tolower(cta_hashtags_merged$text)
+cta_hashtags_merged$text <- removeWords(cta_hashtags_merged$text,stopwords('en'))
+cta_hashtags_merged$text <- removePunctuation(cta_hashtags_merged$text)
+cta_hashtags_merged$text <- gsub('[\r\n]', '', cta_hashtags_merged$text)
+cta_hashtags_merged$text <- gsub("http\\w+", " ", cta_hashtags_merged$text)
+cta_hashtags_merged$text <- gsub("rt", " ", cta_hashtags_merged$text)
+cta_hashtags_merged$text <- gsub("@\\w+", " ", cta_hashtags_merged$text)
+cta_hashtags_merged$text <- gsub("[ |\t]{2,}", " ", cta_hashtags_merged$text)
+cta_hashtags_merged$text <- gsub("^ ", " ", cta_hashtags_merged$text)
+cta_hashtags_merged$text <- gsub(" $", " ", cta_hashtags_merged$text)
+cta_hashtags_merged
+```
+
+### emoji sentiment score
+```{r}
+emoji_Rdict <-read.csv(text=getURL("https://raw.githubusercontent.com/today-is-a-good-day/emojis/master/emDict.csv"), header=TRUE, sep=";")
+emoji_Rdict
+```
+```{r}
+emoji_sentiment_score <-read.csv(file="emoji_sentiment.csv", header=TRUE, sep=",")
+emoji_sentiment_columns <- c("Emoji", "Negative", "Neutral", "Positive")
+emoji_sentiment_score <- emoji_sentiment_score[emoji_sentiment_columns]
+emoji_sentiment_score$sum <-rowSums(emoji_sentiment_score[,c(2,3,4)])
+emoji_sentiment_score$Neg_p <- round(emoji_sentiment_score$Negative / emoji_sentiment_score$sum, 3)
+emoji_sentiment_score$Pos_p <- round(emoji_sentiment_score$Positive / emoji_sentiment_score$sum, 3)
+emoji_sentiment_score$score <- emoji_sentiment_score$Pos_p -  emoji_sentiment_score$Neg_p
+emoji_sentiment_score <- emoji_sentiment_score[,c(1,8)]
+emoji_sentiment_score
+```
+```{r}
+emoji_sentiment_dict <- merge(emoji_Rdict, emoji_sentiment_score, by.x = "Native", by.y = "Emoji")
+emoji_sentiment_dict
+```
+### extract emoji from text
+
+```{r}
+
+```
