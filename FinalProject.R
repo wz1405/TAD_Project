@@ -385,10 +385,22 @@ glimpse(subway_station_list)
 station_names <- unlist(subway_station_list$NAME)
 station_names <- as.character(station_names)
 station_names <- tolower(station_names)
-station_names <- gsub('th', ' ', station_names)
-station_names <- gsub('nd', ' ', station_names)
+station_names <- gsub('th', '', station_names)
+station_names <- gsub('rd', ' ', station_names)
+station_names <- gsub('nd', '', station_names)
 station_names <- unique(station_names)
-#station_names <- gsub('st', '', station_names)
+station_names <- gsub("-", " ", station_names)
+station_names <- gsub("[[:punct:]]", "", station_names)
+station_names <- gsub('   ', ' ', station_names)
+station_names <- gsub('  ', ' ', station_names)
+station_names <- removeWords(station_names,stopwords('en'))
+station_names <- gsub('[\r\n]', ' ', station_names)
+station_names <- gsub("@\\w+", " ", station_names)
+station_names <- gsub("[ |\t]{2,}", " ", station_names)
+station_names <- gsub("^ ", " ", station_names)
+station_names <- gsub(" $", " ", station_names)
+station_names <- gsub("[^\x01-\x7F]", " ", station_names)
+station_names <- gsub("ave", "av", station_names)
 
 # list of lines
 line_names <- unlist(subway_station_list$LINE)
@@ -400,9 +412,6 @@ line_names <- gsub("-", " ", line_names) %>% unlist() %>% unique()
 subway_DF_421 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf421/NYCTSubway_timeline_df.csv", header=TRUE, sep=",", stringsAsFactors = F)
 subway_DF_428 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf428/NYCTSubway_timeline_df_428.csv", header=TRUE, sep=",", stringsAsFactors = F)
 subway_DF_510 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf510/NYCTSubway_timeline_df_510.csv", header=TRUE, sep=",", stringsAsFactors = F)
-nrow(subway_DF_421)
-nrow(subway_DF_428)
-nrow(subway_DF_510)
 
 # merge data frames vertically with rbind()
 subway_timeline_merged <- rbind(subway_DF_421,subway_DF_428,subway_DF_510)
@@ -425,20 +434,29 @@ subway_timeline_merged$text <- removeWords(subway_timeline_merged$text,stopwords
 # subway_timeline_merged$text <- stemDocument(subway_timeline_merged$text)
 # subway_timeline_merged$text <- removePunctuation(subway_timeline_merged$text)
 # remove 'th' in station names
-subway_timeline_merged$text <- gsub('th', ' ', subway_timeline_merged$text)
-subway_timeline_merged$text <- gsub('-', ' ', subway_timeline_merged$text)
+subway_timeline_merged$text <- gsub('http\\S+\\s*', "", subway_timeline_merged$text)
+# gsub(" ?(f|ht)tp(s?)://(.*)[.][a-z]+", "", x)
+subway_timeline_merged$text <- gsub("[[:punct:]]", " ", subway_timeline_merged$text)
+subway_timeline_merged$text <- gsub("@\\w+", " ", subway_timeline_merged$text)
+#subway_timeline_merged$text <- gsub('th', ' ', subway_timeline_merged$text)
+#subway_timeline_merged$text <- gsub('nd', ' ', subway_timeline_merged$text)
+#subway_timeline_merged$text <- gsub('rd', ' ', subway_timeline_merged$text)
+
+#subway_timeline_merged$text <- gsub('-', ' ', subway_timeline_merged$text)
 subway_timeline_merged$text <- gsub('[\r\n]', ' ', subway_timeline_merged$text)
 # removing 'rt', remove 'rt : ' characters do not work:
-subway_timeline_merged$text <- gsub("rt", " ", subway_timeline_merged$text)
+# subway_timeline_merged$text <- gsub("rt", " ", subway_timeline_merged$text)
+subway_timeline_merged$text <- gsub('   ', ' ', subway_timeline_merged$text)
+subway_timeline_merged$text <- gsub('  ', ' ', subway_timeline_merged$text)
 # remove @ strings: 
 # question: remove @ or not? for now, remove, will better help in analyzing word cloud stuff
 subway_timeline_merged$text <- gsub("@\\w+", " ", subway_timeline_merged$text)
 # remove website
-subway_timeline_merged$text <- gsub("http\\w+", " ", subway_timeline_merged$text)
 subway_timeline_merged$text <- gsub("[ |\t]{2,}", " ", subway_timeline_merged$text)
 subway_timeline_merged$text <- gsub("^ ", " ", subway_timeline_merged$text)
 subway_timeline_merged$text <- gsub(" $", " ", subway_timeline_merged$text)
 subway_timeline_merged$text <- gsub("[^\x01-\x7F]", " ", subway_timeline_merged$text)
+subway_timeline_merged$text <- gsub("avenue", "av", subway_timeline_merged$text)
 
 # word cloud
 wordcloud(subway_timeline_merged$text,min.freq = 50,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 200)
@@ -449,6 +467,31 @@ textstat_collocations(subway_timeline_merged$text) %>% arrange(-lambda) %>% slic
 # average retweet and fav
 mean(subway_timeline_merged$favoriteCount)
 mean(subway_timeline_merged$retweetCount)
+
+# any stat
+# subset by 
+subway_issue <- subway_timeline_merged[grep("delay", subway_timeline_merged$text), ]
+dim(subway_issue)
+# top words
+top_words_issue <- textstat_frequency(dfm(subway_issue$text), n = NULL, groups = NULL) %>% select(feature, frequency)
+head(top_words_issue,20)
+
+# select most affected lines by character lengths = 1
+top_lines <- top_words_issue[(nchar(top_words_issue$feature)) == 1, ]
+head(top_lines)
+station <- subway_issue[grep(paste(station_names, collapse="|"), subway_issue$text),]
+#line <- subway_issue[grep(paste(line_names, collapse="|"), subway_issue$text),]
+top_station <- data.frame(station_names,freq=rowSums(!adist(station_names,station,partial = T)))
+top_station <- top_station[order(-top_station$freq),]
+head(top_station, 20)
+
+
+# very hard to filter out the lines and stations affected. 
+# lines can be selected now by choosing the one-character-long strings
+# hard to select some stations ends in 'ave'
+# using gsbut() function to remove the e in the string 'ave' in 'station_names' list.
+
+
 
 # delays stat
 # subset by delays
@@ -471,11 +514,98 @@ head(top_words_station_delay, 40)
 head(textstat_collocations(station_delay$text))
 textstat_collocations(station_delay$text) %>% arrange(-lambda) %>% slice(1:10)
 
-# str count # https://stackoverflow.com/questions/49552174/count-the-frequency-of-strings-in-a-dataframe-r
-station_count_test <- data.frame(station_names,freq=rowSums(!adist(station_names,station_names,partial = T)))
-station_count_test <- station_count_test[order(-station_count_test$freq),]
-head(station_count_test)
+# str count station delay # https://stackoverflow.com/questions/49552174/count-the-frequency-of-strings-in-a-dataframe-r
+station_count_delay <- data.frame(station_names,freq=rowSums(!adist(station_names,station_delay,partial = T)))
+station_count_delay <- station_count_delay[order(-station_count_delay$freq),]
+head(station_count_delay, 10)
+# str count line delay # https://stackoverflow.com/questions/49552174/count-the-frequency-of-strings-in-a-dataframe-r
+line_count_delay <- data.frame(line_names,freq=rowSums(!adist(line_names,line_delay,partial = T)))
+line_count_delay <- line_count_delay[order(-line_count_delay$freq),]
+head(line_count_delay)
 
+
+
+# signal stat
+# subset by delays
+subway_signal <- subway_timeline_merged[grep("signal", subway_timeline_merged$text), ]
+dim(subway_signal)
+# top words
+top_words_signal <- textstat_frequency(dfm(subway_signal$text), n = NULL, groups = NULL) %>% select(feature, frequency)
+head(top_words_signal,20)
+
+# signal problem by subway station
+# check the station names in both dataset are in the same format
+# grep each element in turn 
+# https://stackoverflow.com/questions/38724690/r-filter-rows-that-contain-a-string-from-a-vector/38726850
+station_signal <- subway_signal[grep(paste(station_names, collapse="|"), subway_signal$text),]
+line_signal <- subway_signal[grep(paste(line_names, collapse="|"), subway_signal$text),]
+station_count_signal <- data.frame(station_names,freq=rowSums(!adist(station_names,station_signal,partial = T)))
+station_count_signal <- station_count_signal[order(-station_count_signal$freq),]
+head(station_count_signal, 10)
+line_count_signal <- data.frame(line_names,freq=rowSums(!adist(line_names,line_signal,partial = T)))
+line_count_signal <- line_count_signal[order(-line_count_signal$freq),]
+head(line_count_signal)
+# signal at stations
+#top_words_station_delay <- textstat_frequency(dfm(station_delay$text), n = NULL, groups = NULL) %>% select(feature, frequency)
+#head(top_words_station_delay, 40)
+# bigrams
+#head(textstat_collocations(station_delay$text))
+#textstat_collocations(station_delay$text) %>% arrange(-lambda) %>% slice(1:10)
+
+
+# NYPD stat
+# subset by NYPD
+subway_nypd <- subway_timeline_merged[grep("nypd", subway_timeline_merged$text), ]
+dim(subway_nypd)
+# top words
+top_words_nypd <- textstat_frequency(dfm(subway_nypd$text), n = NULL, groups = NULL) %>% select(feature, frequency)
+head(top_words_nypd,20)
+
+# nypd investigation by subway station
+# check the station names in both dataset are in the same format
+# grep each element in turn 
+# https://stackoverflow.com/questions/38724690/r-filter-rows-that-contain-a-string-from-a-vector/38726850
+station_nypd <- subway_nypd[grep(paste(station_names, collapse="|"), subway_nypd$text),]
+line_nypd <- subway_nypd[grep(paste(line_names, collapse="|"), subway_nypd$text),]
+station_count_nypd <- data.frame(station_names,freq=rowSums(!adist(station_names,station_nypd,partial = T)))
+station_count_nypd <- station_count_nypd[order(-station_count_nypd$freq),]
+head(station_count_nypd, 10)
+line_count_nypd <- data.frame(line_names,freq=rowSums(!adist(line_names,line_nypd,partial = T)))
+line_count_nypd <- line_count_nypd[order(-line_count_nypd$freq),]
+head(line_count_nypd, 10)
+
+
+
+# any stat
+# subset by 
+subway_issue <- subway_timeline_merged[grep("delay", subway_timeline_merged$text), ]
+dim(subway_issue)
+# top words
+top_words_issue <- textstat_frequency(dfm(subway_issue$text), n = NULL, groups = NULL) %>% select(feature, frequency)
+head(top_words_issue,20)
+
+# select most affected lines by character lengths = 1
+top_lines <- top_words_issue[(nchar(top_words_issue$feature)) == 1, ]
+head(top_lines)
+#mta_hashtags_merged <- mta_hashtags_merged[!(mta_hashtags_merged$screenName== 'mta_mood'),]
+
+# nypd investigation by subway station
+# check the station names in both dataset are in the same format
+# grep each element in turn 
+# https://stackoverflow.com/questions/38724690/r-filter-rows-that-contain-a-string-from-a-vector/38726850
+station <- subway_issue[grep(paste(station_names, collapse="|"), subway_issue$text),]
+line <- subway_issue[grep(paste(line_names, collapse="|"), subway_issue$text),]
+station_count <- data.frame(station_names,freq=rowSums(!adist(station_names,station,partial = T)))
+station_count <- station_count[order(-station_count$freq),]
+head(station_count, 10)
+line_count <- data.frame(line_names,freq=rowSums(!adist(line_names,line,partial = T)))
+
+# table(c("Apples","Pears","Oranges","Apples","Apples","Pears"))[["Apples"]]
+# str_count(s,coll("("))
+# str_count(mydf$string, paste(Uniques, collapse='|'))
+
+line_count <- line_count[order(-line_count$freq),]
+head(line_count, 10)
 
 #ggplot(aes(x = created, y = favoriteCount), data = MTA_Hashtags_DF_510) + geom_point()
 
