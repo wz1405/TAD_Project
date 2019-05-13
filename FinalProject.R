@@ -470,7 +470,7 @@ mean(subway_timeline_merged$retweetCount)
 
 # any stat
 # subset by 
-subway_issue <- subway_timeline_merged[grep("delay", subway_timeline_merged$text), ]
+subway_issue <- subway_timeline_merged[grep("switch", subway_timeline_merged$text), ]
 dim(subway_issue)
 # top words
 top_words_issue <- textstat_frequency(dfm(subway_issue$text), n = NULL, groups = NULL) %>% select(feature, frequency)
@@ -484,8 +484,30 @@ station <- subway_issue[grep(paste(station_names, collapse="|"), subway_issue$te
 top_station <- data.frame(station_names,freq=rowSums(!adist(station_names,station,partial = T)))
 top_station <- top_station[order(-top_station$freq),]
 head(top_station, 20)
+test <- data.frame(string=station_names, count=rowSums(sapply(subway_issue$text, function(x, y) str_count(x, y), station_names)))
+test <- test[order(-test$cou),]
+test <- test[(stri_length(test$string)) > 3, ]
+head(test, 10)
+# test 
 
+test <- as.data.frame(cbind(vec = station_names, n = tabulate(match(subway_issue$text, station_names))))
+test <- rowSums(sapply(subway_issue$text, function(x, y) str_count(x, y), station_names))
 
+test <- table(subway_issue$text[subway_issue$text %in% station_names])
+
+test <- data.frame(string=station_names, count=rowSums(sapply(subway_issue$text, function(x, y) str_count(x, y), station_names)))
+
+top_station <- str_count(station$text, paste(station_names, collapse='|'))
+
+test<-setNames(lapply(station$text, function(x) sapply(station_names, function(y)
+  str_count(string = y, pattern = x))), station$text)
+
+test <- sapply(station_names, str_count, string=station$text)
+test <- sum(gregexpr(station_names[j],station$text[i])[[1]] > 0)
+test <-  do.call(rbind,Map(function(x,y)list(y,sum(gregexpr(y,x)[[1]] > 0)), station$text,station_names))
+install.packages("qdap")
+library(qdap)
+test <- termco(station$text, 1:3, station_names)
 # very hard to filter out the lines and stations affected. 
 # lines can be selected now by choosing the one-character-long strings
 # hard to select some stations ends in 'ave'
