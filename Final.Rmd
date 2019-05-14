@@ -24,45 +24,31 @@ lapply(libraries, require, character.only = TRUE)
 
 ```{r}
 # read in the csv as of 421, 428, 510
-CTA_Hashtags_DF_421 <- read.csv(file="AsOf421/tweets_cta.csv", header=TRUE, sep=",", stringsAsFactors = F)
-CTA_Hashtags_DF_428 <- read.csv(file="AsOf428/tweets_cta_428.csv", header=TRUE, sep=",", stringsAsFactors = F)
-CTA_Hashtags_DF_510 <- read.csv(file="AsOf510/tweets_cta_510.csv", header=TRUE, sep=",", stringsAsFactors = F)
-nrow(CTA_Hashtags_DF_421)
-nrow(CTA_Hashtags_DF_428)
-nrow(CTA_Hashtags_DF_510)
+MTA_Hashtags_DF_421 <- read.csv(file="AsOf421/mta_hashtags.csv", header=TRUE, sep=",", stringsAsFactors = F)
+MTA_Hashtags_DF_428 <- read.csv(file="AsOf428/tweetsDF_428.csv", header=TRUE, sep=",", stringsAsFactors = F)
+MTA_Hashtags_DF_510 <- read.csv(file="AsOf510/tweetsDF_510.csv", header=TRUE, sep=",", stringsAsFactors = F)
+nrow(MTA_Hashtags_DF_421)
+nrow(MTA_Hashtags_DF_428)
+nrow(MTA_Hashtags_DF_510)
 ```
 
 ```{r}
 # merge data frames vertically with rbind()
-cta_hashtags_merged <- rbind(CTA_Hashtags_DF_421,CTA_Hashtags_DF_428,CTA_Hashtags_DF_510)
+mta_hashtags_merged <- rbind(MTA_Hashtags_DF_421,MTA_Hashtags_DF_428,MTA_Hashtags_DF_510)
 # sort by date time
-cta_hashtags_merged <- cta_hashtags_merged[order(cta_hashtags_merged$created , decreasing = TRUE ),]
-dim(cta_hashtags_merged)
+mta_hashtags_merged <- mta_hashtags_merged[order(mta_hashtags_merged$created , decreasing = TRUE ),]
+dim(mta_hashtags_merged)
 # subset
-cta_hashtag_columns <- c("X", "text", "favoriteCount", "created", 
-            "screenName", "retweetCount", "longitude", "latitude")
-cta_hashtags_merged <- cta_hashtags_merged[cta_hashtag_columns]
+mta_hashtag_columns <- c("X", "text", "favoriteCount", "created", 
+                         "screenName", "retweetCount", "longitude", "latitude")
+mta_hashtags_merged <- mta_hashtags_merged[mta_hashtag_columns]
+
 # drop duplicated & overlapped data for some dates
 # not working: mta_hashtags_merged_drop <- mta_hashtags_merged[!duplicated(mta_hashtags_merged$text), ]
-cta_hashtags_merged <- cta_hashtags_merged[!(duplicated(cta_hashtags_merged[c("text","created")]) | duplicated(cta_hashtags_merged[c("text","created")], fromLast = F)), ]
+mta_hashtags_merged <- mta_hashtags_merged[!(duplicated(mta_hashtags_merged[c("text","created")]) | duplicated(mta_hashtags_merged[c("text","created")], fromLast = F)), ]
 # get rid of @mta_mood, posts affect the data and possibly results
-cta_hashtags_merged <- cta_hashtags_merged[!(cta_hashtags_merged$screenName== 'mta_mood'),]
+mta_hashtags_merged <- mta_hashtags_merged[!(mta_hashtags_merged$screenName== 'mta_mood'),]
 ```
-
-```{r}
-cta_hashtags_merged$text <- tolower(cta_hashtags_merged$text)
-cta_hashtags_merged$text <- removeWords(cta_hashtags_merged$text,stopwords('en'))
-cta_hashtags_merged$text <- removePunctuation(cta_hashtags_merged$text)
-cta_hashtags_merged$text <- gsub('[\r\n]', '', cta_hashtags_merged$text)
-cta_hashtags_merged$text <- gsub("http\\w+", " ", cta_hashtags_merged$text)
-cta_hashtags_merged$text <- gsub("rt", " ", cta_hashtags_merged$text)
-cta_hashtags_merged$text <- gsub("@\\w+", " ", cta_hashtags_merged$text)
-cta_hashtags_merged$text <- gsub("[ |\t]{2,}", " ", cta_hashtags_merged$text)
-cta_hashtags_merged$text <- gsub("^ ", " ", cta_hashtags_merged$text)
-cta_hashtags_merged$text <- gsub(" $", " ", cta_hashtags_merged$text)
-cta_hashtags_merged
-```
-
 ### emoji sentiment score
 ```{r}
 emoji_Rdict <-read.csv(text=getURL("https://raw.githubusercontent.com/today-is-a-good-day/emojis/master/emDict.csv"), header=TRUE, sep=";")
@@ -86,5 +72,81 @@ emoji_sentiment_dict
 ### extract emoji from text
 
 ```{r}
+## Count the emoji frequency in mta tweets
+## Reference: https://github.com/PRISMOJI/emojis/tree/master/2017.0206%20emoji%20data%20science%20tutorial
+mta_hashtags_merged$text <- iconv(mta_hashtags_merged$text, 'latin1', 'ASCII', 'byte')
+
+df.s <- matrix(NA, nrow = nrow(mta_hashtags_merged), ncol = nrow(emoji_sentiment_dict)); 
+df.s <- sapply(emoji_sentiment_dict$R.encoding, regexpr, mta_hashtags_merged$text, ignore.case = T, useBytes = T, perl=TRUE)
+
+rownames(df.s) <- 1:nrow(df.s); colnames(df.s) <- 1:ncol(df.s); df.t <- data.frame(df.s); df.t$tweetid <- mta_hashtags_merged$X;
+# merge in hashtag data from original tweets dataset
+df.a <- subset(mta_hashtags_merged, select = c(X, text)); 
+df.u <- merge(df.a, df.t, by.y = 'tweetid', by.x = 'X'); 
+df.u$z <- 1; df.u <- arrange(df.u, X); 
+tweets.emojis.matrix <- df.u;
+## create emoji count dataset
+df <- subset(tweets.emojis.matrix)[, c(3:721)]; 
+count <- colSums(df > -1);
+count_ <- rowSums(df > -1)
+
+#mapply(function(x,y) regmatches, mta_hashtags_merged$text, df.s, )
+#regmatches(mta_hashtags_merged$text, (df.s)[,][2])
+#typeof(df.s)
+#dim(df.s)
+#length(mta_hashtags_merged$text)
+
+emojis.m <- cbind(count, emoji_sentiment_dict); emojis.m <- arrange(emojis.m, desc(count));
+emojis.count <- subset(emojis.m, count > 1); emojis.count$dens <- round(1000 * (emojis.count$count / nrow(mta_hashtags_merged)), 1); emojis.count$dens.sm <- (emojis.count$count + 1) / (nrow(mta_hashtags_merged) + 1);
+emojis.count$rank <- as.numeric(row.names(emojis.count));
+#emojis.count.p <- subset(emojis.count, select = c(name, dens, count, rank));
+# print summary stats
+#subset(emojis.count.p, rank <= 10);
+
+emojis.count.p <- subset(emojis.count, select = c(Description, dens, count, rank));
+# print summary stats
+subset(emojis.count.p, rank <= 10);
+num.tweets <- nrow(mta_hashtags_merged); df.t <- rowSums(tweets.emojis.matrix[, c(3:721)] > -1); num.tweets.with.emojis <- length(df.t[df.t > 0]); num.emojis <- sum(emojis.count$count);
+min(mta_hashtags_merged$created); max(mta_hashtags_merged$created); median(mta_hashtags_merged$created);
+num.tweets; num.tweets.with.emojis; round(100 * (num.tweets.with.emojis / num.tweets), 1); num.emojis; nrow(emojis.count);
+
+```
+
+```{r}
+## Plot the emojis with highest frequency
+## Reference: https://github.com/PRISMOJI/emojis/tree/master/2017.0206%20emoji%20data%20science%20tutorial
+df.plot <- subset(emojis.count.p, rank <= 10); xlab <- 'Rank'; ylab <- 'Overall Frequency (per 1,000 Tweets)';
+getwd()
+setwd('/Users/duchang/NYU CUSP/Text as Data/FinalProject/ios_9_3_emoji_files');
+df.plot <- arrange(df.plot, Description);
+imgs <- lapply(paste0(df.plot$Description, '.png'), png::readPNG); g <- lapply(imgs, grid::rasterGrob);
+k <- 0.20 * (10/nrow(df.plot)) * max(df.plot$dens); df.plot$xsize <- k; df.plot$ysize <- k; #df.plot$xsize <- k * (df.plot$dens / max(df.plot$dens)); df.plot$ysize <- k * (df.plot$dens / max(df.plot$dens));
+df.plot <- arrange(df.plot, Description);
+g1 <- ggplot(data = df.plot, aes(x = rank, y = dens)) +
+  geom_bar(stat = 'identity', fill = 'dodgerblue4') +
+  xlab(xlab) + ylab(ylab) +
+  mapply(function(x, y, i) {
+    annotation_custom(g[[i]], xmin = x-0.5*df.plot$xsize[i], xmax = x+0.5*df.plot$xsize[i], 
+                      ymin = y-0.5*df.plot$ysize[i], ymax = y+0.5*df.plot$ysize[i])},
+    df.plot$rank, df.plot$dens, seq_len(nrow(df.plot))) +
+  scale_x_continuous(expand = c(0, 0), breaks = seq(1, nrow(df.plot), 1), labels = seq(1, nrow(df.plot), 1)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1.10 * max(df.plot$dens))) +
+  theme(panel.grid.minor.y = element_blank(),
+        axis.title.x = element_text(size = 10), axis.title.y = element_text(size = 14), 
+        axis.text.x  = element_text(size = 8, colour = 'black'), axis.text.y  = element_text(size = 8, colour = 'black'));
+g1;
+setwd('/Users/duchang/Downloads/emojis-master/2017.0206 emoji data science tutorial');
+png(paste0('emoji_barchart_', as.Date(min(mta_hashtags_merged$created)), '_', as.Date(max(mta_hashtags_merged$created)), '_', Sys.Date(), '_', format(Sys.time(), '%H-%M-%S'), '_n', nrow(mta_hashtags_merged), '.png'), 
+    width = 6600, height = 4000, units = 'px', res = 1000);
+g1; dev.off();
+```
+
+### emoji sentiment analysis
+```{r}
+##
+
+
+
+
 
 ```
