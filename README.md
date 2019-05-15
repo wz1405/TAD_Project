@@ -1,6 +1,6 @@
 # TAD_Project
 
-### data process
+### data preprocess
 - import mta_hashtags and cta_hashtags  
 - examine the data frames  
 - combine three files for each  
