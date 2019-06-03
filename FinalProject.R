@@ -7,7 +7,7 @@ libraries <- c("ldatuning", "topicmodels", "ggplot2",
                "gutenbergr", "data.table", "stringi", "stringr",
                "xml2", "rvest", "tidyverse", "reshape2","httr",
                "ROAuth", "twitteR", "readtext", "tm", "SnowballC",
-               "wordcloud", "RColorBrewer", "syuzhet")
+               "wordcloud", "RColorBrewer", "syuzhet", "bursts")
 lapply(libraries, require, character.only = TRUE)
 
 setwd("/Users/zhengwenjie/Documents/RData/") 
@@ -19,7 +19,6 @@ MTA_Hashtags_DF_510 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf510
 nrow(MTA_Hashtags_DF_421)
 nrow(MTA_Hashtags_DF_428)
 nrow(MTA_Hashtags_DF_510)
-
 
 # merge data frames vertically with rbind()
 mta_hashtags_merged <- rbind(MTA_Hashtags_DF_421,MTA_Hashtags_DF_428,MTA_Hashtags_DF_510)
@@ -39,7 +38,7 @@ mta_hashtags_merged <- mta_hashtags_merged[!(mta_hashtags_merged$screenName== 'm
 
 # bigrams
 head(textstat_collocations(mta_hashtags_merged$text))
-textstat_collocations(mta_hashtags_merged$text) %>% arrange(-lambda) %>% slice(1:10)
+textstat_collocations(mta_hashtags_merged$text) %>% arrange(-lambda) %>% slice(1:20)
 
 # preprocessing & cleaning
 mta_hashtags_merged$text <- tolower(mta_hashtags_merged$text)
@@ -179,7 +178,41 @@ ggplot(data=Sentimentscores_mta,aes(x=sentiment,y=Score))+geom_bar(aes(fill=sent
   theme(legend.position="none")+
   xlab("Sentiments")+ylab("scores")+ggtitle("Sentiments of people behind the tweets on MTA hashtags")+ theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+# Emotions for each tweet using NRC dictionary https://tabvizexplorer.com/sentiment-analysis-using-r-and-twitter/
+emotions <- get_nrc_sentiment(mta_hashtags_merged$text)
+emo_bar = colSums(emotions)
+emo_sum = data.frame(count=emo_bar, emotion=names(emo_bar))
+emo_sum$emotion = factor(emo_sum$emotion, levels=emo_sum$emotion[order(emo_sum$count, decreasing = TRUE)])
+# Create comparison word cloud data for #mta
+wordcloud_tweet = c(
+  paste(mta_hashtags_merged$text[emotions$anger > 0], collapse=" "),
+  paste(mta_hashtags_merged$text[emotions$anticipation > 0], collapse=" "),
+  paste(mta_hashtags_merged$text[emotions$disgust > 0], collapse=" "),
+  paste(mta_hashtags_merged$text[emotions$fear > 0], collapse=" "),
+  paste(mta_hashtags_merged$text[emotions$joy > 0], collapse=" "),
+  paste(mta_hashtags_merged$text[emotions$sadness > 0], collapse=" "),
+  paste(mta_hashtags_merged$text[emotions$surprise > 0], collapse=" "),
+  paste(mta_hashtags_merged$text[emotions$trust > 0], collapse=" ")
+)
 
+# create corpus
+corpus = Corpus(VectorSource(wordcloud_tweet))
+# remove punctuation, convert every word in lower case and remove stop words
+#corpus = tm_map(corpus, tolower)
+#corpus = tm_map(corpus, removePunctuation)
+#corpus = tm_map(corpus, removeWords, c(stopwords("english")))
+#corpus = tm_map(corpus, stemDocument)
+# create document term matrix
+tdm = TermDocumentMatrix(corpus)
+# convert as matrix
+tdm = as.matrix(tdm)
+tdmnew <- tdm[nchar(rownames(tdm)) < 11,]
+# column name binding
+colnames(tdm) = c('anger', 'anticipation', 'disgust', 'fear', 'joy', 'sadness', 'surprise', 'trust')
+colnames(tdmnew) <- colnames(tdm)
+comparison.cloud(tdmnew, random.order=T,
+                 colors = c("#00B2FF", "red", "#FF0099", "#6600CC", "green", "orange", "blue", "brown"),
+                 title.size=1, max.words=250, scale=c(2.5, 0.4),rot.per=0.4)
 
 
 
@@ -360,6 +393,228 @@ ggplot(data=Sentimentscores_cta,aes(x=sentiment,y=Score))+geom_bar(aes(fill=sent
   theme(legend.position="none")+
   xlab("Sentiments")+ylab("scores")+ggtitle("Sentiments of people behind the tweets on CTA hashtags")+ theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+
+
+# --------------------------
+# #nycsubway
+# --------------------------
+
+# read in the csv as of 421, 428, 510
+nycsubway_Hashtags_DF_421 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf421/tweets_nycsubway_DF.csv", header=TRUE, sep=",", stringsAsFactors = F)
+nycsubway_Hashtags_DF_428 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf428/tweets_nycsubway_DF_428.csv", header=TRUE, sep=",", stringsAsFactors = F)
+nycsubway_Hashtags_DF_510 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf510/tweets_nycsubway_DF_510.csv", header=TRUE, sep=",", stringsAsFactors = F)
+nrow(nycsubway_Hashtags_DF_421)
+nrow(nycsubway_Hashtags_DF_428)
+nrow(nycsubway_Hashtags_DF_510)
+
+# merge data frames vertically with rbind()
+nycSubway_hashtags_merged <- rbind(nycsubway_Hashtags_DF_421,nycsubway_Hashtags_DF_428,nycsubway_Hashtags_DF_510)
+# sort by date time
+nycSubway_hashtags_merged <- nycSubway_hashtags_merged[order(nycSubway_hashtags_merged$created , decreasing = TRUE ),]
+dim(nycSubway_hashtags_merged)
+# subset
+hashtag_columns <- c("X", "text", "favoriteCount", "created", 
+                         "screenName", "retweetCount", "longitude", "latitude")
+nycSubway_hashtags_merged <- nycSubway_hashtags_merged[hashtag_columns]
+
+# drop duplicated & overlapped data for some dates
+# not working: mta_hashtags_merged_drop <- mta_hashtags_merged[!duplicated(mta_hashtags_merged$text), ]
+nycSubway_hashtags_merged <- nycSubway_hashtags_merged[!(duplicated(nycSubway_hashtags_merged[c("text","created")]) | duplicated(nycSubway_hashtags_merged[c("text","created")], fromLast = F)), ]
+# get rid of @mta_mood, posts affect the data and possibly results
+#mta_hashtags_merged <- mta_hashtags_merged[!(mta_hashtags_merged$screenName== 'mta_mood'),]
+
+# bigrams
+head(textstat_collocations(nycSubway_hashtags_merged$text))
+textstat_collocations(nycSubway_hashtags_merged$text) %>% arrange(-lambda) %>% slice(1:20)
+
+# preprocessing & cleaning
+nycSubway_hashtags_merged$text <- tolower(nycSubway_hashtags_merged$text)
+nycSubway_hashtags_merged$text <- removeWords(nycSubway_hashtags_merged$text,stopwords('en'))
+nycSubway_hashtags_merged$text <- removePunctuation(nycSubway_hashtags_merged$text)
+nycSubway_hashtags_merged$text <- gsub('[\r\n]', '', nycSubway_hashtags_merged$text)
+# removing 'rt', remove 'rt : ' characters do not work:
+nycSubway_hashtags_merged$text <- gsub("rt", " ", nycSubway_hashtags_merged$text)
+# remove @ strings: 
+# question: remove @ or not? for now, remove, will better help in analyzing word cloud stuff
+nycSubway_hashtags_merged$text <- gsub("@\\w+", " ", nycSubway_hashtags_merged$text)
+# remove website
+nycSubway_hashtags_merged$text <- gsub("http\\w+", " ", nycSubway_hashtags_merged$text)
+nycSubway_hashtags_merged$text <- gsub("[ |\t]{2,}", " ", nycSubway_hashtags_merged$text)
+nycSubway_hashtags_merged$text <- gsub("^ ", " ", nycSubway_hashtags_merged$text)
+nycSubway_hashtags_merged$text <- gsub(" $", " ", nycSubway_hashtags_merged$text)
+nycSubway_hashtags_merged$text <- gsub("[^\x01-\x7F]", " ", nycSubway_hashtags_merged$text)
+
+# word cloud
+wordcloud(nycSubway_hashtags_merged$text,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 200)
+
+# average retweet and fav
+mean(nycSubway_hashtags_merged$favoriteCount)
+mean(nycSubway_hashtags_merged$retweetCount)
+# histogram of fav & retweet
+hist(nycSubway_hashtags_merged$favoriteCount,
+     main="Histogram of Favorites Count", 
+     xlab="Favorites Count",
+     ylab="Histogram Frequency Distribution",
+     border="black", 
+     col="green")
+hist(nycSubway_hashtags_merged$retweetCount,
+     main="Histogram of Retweet Count", 
+     xlab="Retweet Count",
+     ylab="Histogram Frequency Distribution",
+     border="black", 
+     col="green")
+
+#-----------------------------
+# 4 WEIGHTED DOCUMENT FEATURE MATRIX
+#-----------------------------
+# WHAT ARE WE WEIGHTING?
+
+# Now we will create a DFM of all the SOTU speeches
+nycSubway_hashtag_dfm <- dfm(nycSubway_hashtags_merged$text)
+nycSubway_hashtag_dfm[, 1:10]  # notice sparsity
+topfeatures(nycSubway_hashtag_dfm)
+topfeatures(nycSubway_hashtag_dfm[nrow(nycSubway_hashtag_dfm),])
+
+# 4.1 tfidf - Frequency weighting
+weighted_nycSubway_hashtag_dfm <- dfm_tfidf(nycSubway_hashtag_dfm) # uses the absolute frequency of terms in each document
+topfeatures(weighted_nycSubway_hashtag_dfm)
+topfeatures(weighted_nycSubway_hashtag_dfm[nrow(weighted_nycSubway_hashtag_dfm),])
+
+# 4.2 tfidf - Relative frequency weighting
+?dfm_tfidf
+normalized_nycSubway_hashtag <- dfm_tfidf(nycSubway_hashtag_dfm, scheme_tf = "prop") # Uses feature proportions within documents: divdes each term by the total count of features in the document
+topfeatures(normalized_nycSubway_hashtag)
+topfeatures(normalized_nycSubway_hashtag[nrow(normalized_nycSubway_hashtag),])
+
+# Heap's Law
+tokens <- tokens(nycSubway_hashtags_merged$text) 
+Tee <- sum(lengths(tokens))
+nycSubway_hashtag_dfm <- dfm(nycSubway_hashtags_merged$text)
+M <- nfeat(nycSubway_hashtag_dfm)  # number of features = number of types
+# Let's check using parameter values from MRS Ch. 5 for a corpus with more than 100,000 tokens
+k <- 44
+b <- .5
+k * (Tee)^b
+M
+
+# Zipf's Law
+plot(log10(1:100), log10(topfeatures(nycSubway_hashtag_dfm, 100)),
+     xlab = "log10(rank)", ylab = "log10(frequency)", main = "Zipf's Graph of MTA Related Hashtags")
+# Fits a linear regression to check if slope is approx -1.0
+regression <- lm(log10(topfeatures(nycSubway_hashtag_dfm, 100)) ~ log10(1:100))
+# Adds the fitted line from regression to the plot
+abline(regression, col = "red")
+# Returns the 95% confidence intervals for the regression coefficients
+confint(regression)
+# Provides R-squared, F-test, and cofficient estimates from regression
+summary(regression)
+# Zipf's law as a feature selection tool (e.g. http://www.jmlr.org/papers/volume3/forman03a/forman03a_full.pdf)
+plot(1:100, topfeatures(nycSubway_hashtag_dfm, 100),
+     xlab = "rank", ylab = "frequency", main = "Top 100 Words in MTA Related Hashtags")
+
+# sentiment analysis
+# Get the data directory from readtable
+positivewords <- read.table("/Users/zhengwenjie/Documents/RData/positive-words.txt")
+negativewords <- read.table("/Users/zhengwenjie/Documents/RData/negative-words.txt")
+# unlist and as.character make them bag of words
+positivewords <- as.character(unlist(positivewords))
+negativewords <- as.character(unlist(negativewords))
+
+nycSubway_hashtags_merged$text <- tolower(nycSubway_hashtags_merged$text)
+nycSubway_hashtags_merged$text <- as.character(nycSubway_hashtags_merged$text)
+
+# calculate and report the occurence of postive & negative words in the review text
+# subtract one with another to get the score
+nycSubway_hashtags_merged$text_positive <- rowSums(dfm(nycSubway_hashtags_merged$text, select = positivewords))
+nycSubway_hashtags_merged$text_negative <- rowSums(dfm(nycSubway_hashtags_merged$text, select = negativewords))
+nycSubway_hashtags_merged$sentiment_score <- nycSubway_hashtags_merged$text_positive - nycSubway_hashtags_merged$text_negative
+
+# if is 0 and above, tag it positive and negative for less than 0
+nycSubway_hashtags_merged$sentiment_attitude[nycSubway_hashtags_merged$sentiment_score > 0] <- 'positive'
+nycSubway_hashtags_merged$sentiment_attitude[nycSubway_hashtags_merged$sentiment_score < 0] <- 'negative'
+nycSubway_hashtags_merged$sentiment_attitude[nycSubway_hashtags_merged$sentiment_score == 0] <- 'neutral'
+# number of occurence of positive & negative & the total row number in the column
+pos_number <- nrow(nycSubway_hashtags_merged[nycSubway_hashtags_merged$sentiment_score > 0,])
+neg_number <- nrow(nycSubway_hashtags_merged[nycSubway_hashtags_merged$sentiment_score < 0,])
+neu_number <- nrow(nycSubway_hashtags_merged[nycSubway_hashtags_merged$sentiment_score == 0,])
+
+total_rows <- nrow(nycSubway_hashtags_merged)
+
+# calculate and report the ratio
+positive_ratio <- pos_number / total_rows
+negative_ratio <- neg_number / total_rows
+neutral_ratio <- neu_number / total_rows
+
+cat(
+  "positive_ratio: ", positive_ratio, "\n",
+  "negative_ratio:",  negative_ratio, "\n",
+  "neutral_ratio:",  neutral_ratio, "\n"
+)
+
+top_words <- textstat_frequency(dfm(nycSubway_hashtags_merged$text), n = NULL, groups = NULL) %>% select(feature, frequency)
+head(top_words,20)
+
+# histogram
+hist(nycSubway_hashtags_merged$sentiment_score,
+     main="Histogram of Sentiment Score", 
+     xlab="Sentiment Score",
+     ylab="Histogram Frequency Distribution",
+     border="black", 
+     col="green")
+
+
+# emoji analysis
+
+
+# nrc sentiment
+# need to figure out how nrc sentiment works
+mysentiment_nycSubway<-get_nrc_sentiment((nycSubway_hashtags_merged$text))
+Sentimentscores_nycSubway<-data.frame(colSums(mysentiment_nycSubway[,]))
+names(Sentimentscores_nycSubway)<-"Score"
+Sentimentscores_nycSubway<-cbind("sentiment"=rownames(Sentimentscores_nycSubway),Sentimentscores_nycSubway)
+rownames(Sentimentscores_nycSubway)<-NULL
+ggplot(data=Sentimentscores_nycSubway,aes(x=sentiment,y=Score))+geom_bar(aes(fill=sentiment),stat = "identity")+
+  theme(legend.position="none")+
+  xlab("Sentiments")+ylab("scores")+ggtitle("Sentiments of people behind the tweets on #nycsubway hashtags")+ theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Emotions for each tweet using NRC dictionary https://tabvizexplorer.com/sentiment-analysis-using-r-and-twitter/
+emotions <- get_nrc_sentiment(nycSubway_hashtags_merged$text)
+emo_bar = colSums(emotions)
+emo_sum = data.frame(count=emo_bar, emotion=names(emo_bar))
+emo_sum$emotion = factor(emo_sum$emotion, levels=emo_sum$emotion[order(emo_sum$count, decreasing = TRUE)])
+# Create comparison word cloud data for #mta
+wordcloud_tweet = c(
+  paste(nycSubway_hashtags_merged$text[emotions$anger > 0], collapse=" "),
+  paste(nycSubway_hashtags_merged$text[emotions$anticipation > 0], collapse=" "),
+  paste(nycSubway_hashtags_merged$text[emotions$disgust > 0], collapse=" "),
+  paste(nycSubway_hashtags_merged$text[emotions$fear > 0], collapse=" "),
+  paste(nycSubway_hashtags_merged$text[emotions$joy > 0], collapse=" "),
+  paste(nycSubway_hashtags_merged$text[emotions$sadness > 0], collapse=" "),
+  paste(nycSubway_hashtags_merged$text[emotions$surprise > 0], collapse=" "),
+  paste(nycSubway_hashtags_merged$text[emotions$trust > 0], collapse=" ")
+)
+
+# create corpus
+corpus = Corpus(VectorSource(wordcloud_tweet))
+# remove punctuation, convert every word in lower case and remove stop words
+#corpus = tm_map(corpus, tolower)
+#corpus = tm_map(corpus, removePunctuation)
+#corpus = tm_map(corpus, removeWords, c(stopwords("english")))
+#corpus = tm_map(corpus, stemDocument)
+# create document term matrix
+tdm = TermDocumentMatrix(corpus)
+# convert as matrix
+tdm = as.matrix(tdm)
+tdmnew <- tdm[nchar(rownames(tdm)) < 11,]
+# column name binding
+colnames(tdm) = c('anger', 'anticipation', 'disgust', 'fear', 'joy', 'sadness', 'surprise', 'trust')
+colnames(tdmnew) <- colnames(tdm)
+comparison.cloud(tdmnew, random.order=T,
+                 colors = c("#00B2FF", "red", "#FF0099", "#6600CC", "green", "orange", "blue", "brown"),
+                 title.size=1, max.words=250, scale=c(2.5, 0.4),rot.per=0.4)
+
+
+
 # -----------------------------------------
 # nyct subway timeline
 # -----------------------------------------
@@ -470,7 +725,7 @@ mean(subway_timeline_merged$retweetCount)
 
 # any stat
 # subset by 
-subway_issue <- subway_timeline_merged[grep("switch", subway_timeline_merged$text), ]
+subway_issue <- subway_timeline_merged[grep("struck", subway_timeline_merged$text), ]
 dim(subway_issue)
 # top words
 top_words_issue <- textstat_frequency(dfm(subway_issue$text), n = NULL, groups = NULL) %>% select(feature, frequency)
@@ -481,13 +736,76 @@ top_lines <- top_words_issue[(nchar(top_words_issue$feature)) == 1, ]
 head(top_lines)
 station <- subway_issue[grep(paste(station_names, collapse="|"), subway_issue$text),]
 #line <- subway_issue[grep(paste(line_names, collapse="|"), subway_issue$text),]
-top_station <- data.frame(station_names,freq=rowSums(!adist(station_names,station,partial = T)))
-top_station <- top_station[order(-top_station$freq),]
-head(top_station, 20)
+#affected_station <- data.frame(station_names,freq=rowSums(!adist(station_names,station,partial = T)))
+#affected_station <- affected_station[order(-affected_station$freq),]
+#head(affected_station, 20)
 test <- data.frame(string=station_names, count=rowSums(sapply(subway_issue$text, function(x, y) str_count(x, y), station_names)))
 test <- test[order(-test$cou),]
 test <- test[(stri_length(test$string)) > 3, ]
 head(test, 10)
+
+
+#-----------------------
+# burstness
+#-----------------------
+bursty <- function(word = "abc", DTM, date) {
+  word.vec <- DTM[, which(colnames(DTM) == word)]
+  if(length(word.vec) == 0) {
+    print(word, " does not exist in this corpus.")
+  } 
+  else {
+    word.times <- c(0,which(as.vector(word.vec)>0))
+    
+    kl <- kleinberg(word.times, gamma = 0.5)
+    kl$start <- date[kl$start+1]
+    kl$end <- date[kl$end]
+    max_level <- max(kl$level)
+    
+    plot(c(kl$start[1], kl$end[1]), c(1,max_level),
+         type = "n", xlab = "Time", ylab = "Level", bty = "n",
+         xlim = c(min(date), max(date)), ylim = c(1, max_level),
+         yaxt = "n")
+    axis(2, at = 1:max_level)
+    
+    for (i in 1:nrow(kl)) {
+      if (kl$start[i] != kl$end[i]) {
+        arrows(kl$start[i], kl$level[i], kl$end[i], kl$level[i], code = 3, angle = 90,
+               length = 0.05)
+      } 
+      else {
+        points(kl$start[i], kl$level[i])
+      }
+    }
+    
+    print(kl)
+  }
+  #note deviation from standard defaults bec don't have that much data
+}
+#subway_timeline_merged$text
+subway_timeline_merged$created <- as.Date(as.POSIXct(subway_timeline_merged$created, 'GMT'))
+# subway_timeline_merged$created <- strftime(subway_timeline_merged$created, format = "%j")
+# subway_timeline_merged$created <- as.numeric(subway_timeline_merged$created)
+#docvars(subway_timeline_merged)$created <- as.numeric(gsub("[[:alpha:]]","",subway_timeline_merged$created))
+subway_timeline_merged_dfm <- dfm(subway_timeline_merged$text)
+# 3.1 Evaluating the burstiness of several key words
+bursty("delays", subway_timeline_merged_dfm, subway_timeline_merged$created)
+bursty("door", subway_timeline_merged_dfm, subway_timeline_merged$created)
+bursty("power", subway_timeline_merged_dfm, subway_timeline_merged$created)
+bursty("struck", subway_timeline_merged_dfm, subway_timeline_merged$created)
+bursty("mechanical", subway_timeline_merged_dfm, subway_timeline_merged$created)
+bursty("maintenance", subway_timeline_merged_dfm, subway_timeline_merged$created)
+bursty("soiled", subway_timeline_merged_dfm, subway_timeline_merged$created)
+# needs exact match
+
+
+
+
+
+
+
+
+
+
 # test 
 
 test <- as.data.frame(cbind(vec = station_names, n = tabulate(match(subway_issue$text, station_names))))
@@ -600,7 +918,7 @@ head(line_count_nypd, 10)
 
 # any stat
 # subset by 
-subway_issue <- subway_timeline_merged[grep("delay", subway_timeline_merged$text), ]
+subway_issue <- subway_timeline_merged[grep("struck", subway_timeline_merged$text), ]
 dim(subway_issue)
 # top words
 top_words_issue <- textstat_frequency(dfm(subway_issue$text), n = NULL, groups = NULL) %>% select(feature, frequency)
@@ -673,9 +991,3 @@ glimpse(polling_data)
 #Warning message:
 #  In statusBase(cmd, params, n, 3200, ...) :
 #  statuses/user_timeline has a cap of 3200 statuses, clipping
-
-
-
-
-
-
