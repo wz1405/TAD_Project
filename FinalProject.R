@@ -9,13 +9,13 @@ libraries <- c("ldatuning", "topicmodels", "ggplot2",
                "ROAuth", "twitteR", "readtext", "tm", "SnowballC",
                "wordcloud", "RColorBrewer", "syuzhet", "bursts")
 lapply(libraries, require, character.only = TRUE)
-
-setwd("/Users/zhengwenjie/Documents/RData/") 
+getwd()
+setwd("/Users/duchang/NYU CUSP/Text as Data/FinalProject") 
 
 # read in the csv as of 421, 428, 510
-MTA_Hashtags_DF_421 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf421/mta_hashtags.csv", header=TRUE, sep=",", stringsAsFactors = F)
-MTA_Hashtags_DF_428 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf428/tweetsDF_428.csv", header=TRUE, sep=",", stringsAsFactors = F)
-MTA_Hashtags_DF_510 <- read.csv(file="/Users/zhengwenjie/Documents/RData/AsOf510/tweetsDF_510.csv", header=TRUE, sep=",", stringsAsFactors = F)
+MTA_Hashtags_DF_421 <- read.csv(file="AsOf421/mta_hashtags.csv", header=TRUE, sep=",", stringsAsFactors = F)
+MTA_Hashtags_DF_428 <- read.csv(file="AsOf428/tweetsDF_428.csv", header=TRUE, sep=",", stringsAsFactors = F)
+MTA_Hashtags_DF_510 <- read.csv(file="AsOf510/tweetsDF_510.csv", header=TRUE, sep=",", stringsAsFactors = F)
 nrow(MTA_Hashtags_DF_421)
 nrow(MTA_Hashtags_DF_428)
 nrow(MTA_Hashtags_DF_510)
